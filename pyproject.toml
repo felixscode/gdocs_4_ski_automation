@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools >= 69.5.1"]
+build-backend = "setuptools.build_meta"
+[project]
+dynamic = ["version"]
+name = "gdocs_4_ski_automation"
+dependencies = ["pandas"]
+requires-python = ">= 3.11"
+authors = [
+    {name = "Felix Schelling", email = "felix.schelling@protonmail.com"},
+]
+description = "Google Docs Automation for Ski class Registration Automation."
+readme = {file = "README.md", content-type = "text/markdown"}
+classifiers = [
+    # How mature is this porject? Common values are
+    # 3 - Alpha
+    # 4 - Beta
+    # 5 - Production / Stable
+    "Development Status :: 3 - Alpha",
+    # Indicate audience
+    "Intended Audience :: Researchers",
+    "Programming Lanugage :: Python :: 3.12",
+]
+[tool.setuptools]
+package-dir = {"" = "."}
+[project.urls]
+Repository = "https://github.com/felixscode/gdocs_4_ski_automation"
+[tool.black]
+line-length = 100
