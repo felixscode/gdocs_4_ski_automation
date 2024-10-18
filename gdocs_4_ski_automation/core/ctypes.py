@@ -3,25 +3,21 @@ from enum import Enum
 
 class Course(Enum):
     ZWEGERL = "Zwergel"
-    NORMAL = "Normal"
+    ZWEGERL_SNOWBOARD = "Zwergel Snowboard"
+    SKI = "Ski"
+    SNOWBOARD = "Snowboard"
 
 @dataclass
 class Name:
     first :str
     last: str
 
-@dataclass
-class Adress:
-    street: str
-    number: str
-    plz: str
-    city: str
     
 
 @dataclass
 class ContactPerson:
     name : Name
-    adress: Adress
+    adress: str
     mail: str
     tel: str
 
@@ -31,7 +27,7 @@ class Participant:
     name: Name
     age: int
     course: Course
-    member: bool
+    pre_course: str
     notes: str
 
 @dataclass
