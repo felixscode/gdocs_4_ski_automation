@@ -143,7 +143,8 @@ class GDocsDumper():
     def dump_mail_flags(self):
         sheet = self.gc.open_by_key(self.sheet_ids['db'])
         worksheet = sheet.worksheet("Formularantworten")
-
+        registration_id = [[str(r._id)] for r in self.registrations]
+        worksheet.update("BF2",registration_id)
         cell_values = worksheet.get_all_values()
         ids = list(zip(*cell_values))[-1][1:]
         id_mapping = dict()
@@ -152,9 +153,9 @@ class GDocsDumper():
         for registration in self.registrations:
             p_mail_sent = "TRUE" if registration.payment_mail_sent else "FALSE"
             r_mail_sent = "TRUE" if registration.registration_mail_sent else "FALSE"
-            worksheet.update_acell(id_mapping[registration._id]["r_cell"],r_mail_sent)
-            worksheet.update_acell(id_mapping[registration._id]["p_cell"],p_mail_sent)
-            worksheet.update_acell(id_mapping[registration._id]["price_cell"],registration.payment.amount)
+            worksheet.update_acell(id_mapping[str(registration._id)]["r_cell"],r_mail_sent)
+            worksheet.update_acell(id_mapping[str(registration._id)]["p_cell"],p_mail_sent)
+            worksheet.update_acell(id_mapping[str(registration._id)]["price_cell"],registration.payment.amount)
 
     def dump_registrations(self):
         self._dump_overview()

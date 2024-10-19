@@ -16,18 +16,19 @@ DB_FILE_NAME = "anmeldungen_db_do_not_change.xlsx"
 def dataframe_to_registration_mapper(db_frame, settings_frame, registrations_frame):
     # Implement your logic to map dataframes to registrations
     for i,line in db_frame["Formularantworten"].iterrows():
-        time_stemp = line["Zeitstempel"]
-        contact = build_contact(line)
-        participants = list(filter(lambda x: x is not None,(build_participant(line,i,registrations_frame) for i in range(8))))
-        pay_sum = get_price(participants, time_stemp, settings_frame)
-        payed_flag = get_paid_flag(registrations_frame, line["ID"])
-        payment = Payment(amount=pay_sum, payed=payed_flag)
-        payment_mail_sent = line["p_mail_sent"] == "TRUE"
-        registration_mail_sent = line["r_mail_sent"] == "TRUE"
-
+        if line["Zeitstempel"] != "":
+            time_stemp = line["Zeitstempel"]
+            contact = build_contact(line)
+            participants = list(filter(lambda x: x is not None,(build_participant(line,i,registrations_frame) for i in range(8))))
+            pay_sum = get_price(participants, time_stemp, settings_frame)
+            payed_flag = get_paid_flag(registrations_frame, line["ID"])
+            payment = Payment(amount=pay_sum, payed=payed_flag)
+            payment_mail_sent = line["p_mail_sent"] == "TRUE"
+            registration_mail_sent = line["r_mail_sent"] == "TRUE"
+        
         yield Registration(
             time_stemp=time_stemp,
-            _id=line["ID"],
+            _id=i+1,
             contact=contact,
             participants=participants,
             payment=payment,
