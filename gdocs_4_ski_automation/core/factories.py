@@ -3,8 +3,8 @@ import pandas as pd
 from gdocs_4_ski_automation.core.ctypes import Registration, ContactPerson , Course, Name, Participant,Payment
 from pathlib import Path
 
-from google.oauth2.service_account import Credentials
 from gdocs_4_ski_automation.core.price_calculation import get_price
+from gdocs_4_ski_automation.utils.utils import GoogleAuthenticatorInterface
 import gspread
 
 SETTINGS_FILE_NAME = "settings.xlsx"
@@ -16,15 +16,14 @@ DB_FILE_NAME = "anmeldungen_db_do_not_change.xlsx"
 def dataframe_to_registration_mapper(db_frame, settings_frame, registrations_frame):
     # Implement your logic to map dataframes to registrations
     for i,line in db_frame["Formularantworten"].iterrows():
-        print(line)
         time_stemp = line["Zeitstempel"]
         contact = build_contact(line)
-        participants = list(filter(lambda x: x is not None,(build_participant(line,i) for i in range(8))))
+        participants = list(filter(lambda x: x is not None,(build_participant(line,i,registrations_frame) for i in range(8))))
         pay_sum = get_price(participants, time_stemp, settings_frame)
         payed_flag = get_paid_flag(registrations_frame, line["ID"])
         payment = Payment(amount=pay_sum, payed=payed_flag)
-        payment_mail_sent = line["p_mail_sent"] == "True"
-        registration_mail_sent = line["r_mail_sent"] == "True"
+        payment_mail_sent = line["p_mail_sent"] == "TRUE"
+        registration_mail_sent = line["r_mail_sent"] == "TRUE"
 
         yield Registration(
             time_stemp=time_stemp,
@@ -42,9 +41,17 @@ def get_paid_flag(registrations_frame, id):
         return False
     result = registrations_frame["Bezahlung"].loc[registrations_frame["Bezahlung"]["ID"] == id]
     paid = result["Bezahlt"].values[0]
-    return paid == "True"
+    return paid == "TRUE"
 
-def build_participant(line, i):
+# def get_member_flag(registrations_frame, id):
+#     registerd_ids= list(filter(lambda x: x != "",list(registrations_frame["Bezahlung"].loc[:,"ID"].values)))
+#     if id not in registerd_ids:
+#         return False
+#     result = registrations_frame["Mitglied"].loc[registrations_frame["Mitglied"]["ID"] == id]
+#     paid = result["Mitglied"].values[0]
+#     return paid == "TRUE"
+
+def build_participant(line, i,registration_frame):
     match line[f"Welcher_Kurs_soll_besucht_werden?_{i if i >0 else ""}"]:
         case "Zwergerl":
             course = Course.ZWEGERL
@@ -64,7 +71,7 @@ def build_participant(line, i):
             age = int(line[f"Alter_zum_Kursbeginn{i if i >0 else ''}"]),
             course = course,
             pre_course = line[f"Hat_die_Teilnehmer*in_bereits_Kurse_besucht?{i if i >0 else ''}"],
-            notes = line[f"Hast_du_noch_ein_Frage_oder_willst_eine_Bemerkung_hinterlassen?{i if i >0 else ''}"]
+            notes = line[f"Hast_du_noch_ein_Frage_oder_willst_eine_Bemerkung_hinterlassen?{i if i >0 else ''}"],
         )
 
 def build_contact(line):
@@ -75,26 +82,7 @@ def build_contact(line):
             tel=line["Unter_welcher_Nummer_können_wir_dich_erreichen?"]
         )
 
-class GoogleAuthenticatorInterface():
-    def __init__(self, credentials_path):
-        self.credentials_path = credentials_path
-        self.credentials = self.get_credentials()
-        self.gspread = self.get_gspreat()
 
-    def get_credentials(self):
-        scopes = [
-        'https://www.googleapis.com/auth/spreadsheets',
-        'https://www.googleapis.com/auth/drive'
-        ]
-
-        try:
-            cred = Credentials.from_service_account_file(self.credentials_path,scopes=scopes)
-        except FileNotFoundError:
-            raise FileNotFoundError("Credentials file not found")
-        return cred
-    
-    def get_gspreat(self):
-        return gspread.authorize(self.credentials)
 
 class LocalFileRegistrationFactory():
     def __init__(self, file_path):
@@ -123,7 +111,7 @@ class LocalFileRegistrationFactory():
         return dataframe_to_registration_mapper(self.db_frame, self.settings_frame, self.registrations_frame)
     
 class GDocsRegistrationFactory():
-    def __init__(self, credentials_path, sheet_ids):
+    def __init__(self, sheet_ids,g_client):
 
         self.sheet_ids = sheet_ids
 
@@ -131,13 +119,12 @@ class GDocsRegistrationFactory():
         self.registration_sheet_id = sheet_ids['registrations']
         self.db_sheet_id = sheet_ids['db']
 
-        google_authenticator = GoogleAuthenticatorInterface(credentials_path)
-        self.gc = google_authenticator.gspread
+        self.gc = g_client
 
         self.settings_frame ={title:frame for title,frame in self._load(self.setting_sheet_id,["Preise"])}
         self.registrations_frame = {title:frame for title,frame in self._load(self.registration_sheet_id,["Bezahlung"],head=2)}
         self.db_frame = {title:frame for title,frame in self._load(self.db_sheet_id,["Formularantworten"],head=1)}
-        print(self.db_frame["Formularantworten"])
+
 
     def check_sheet_id(self, sheet_id):
         try:
@@ -175,6 +162,8 @@ class GDocsRegistrationFactory():
 
 if __name__ == "__main__":
     # factory = LocalFileRegistrationFactory(Path("data/sample_sheets/"))
-    factory = GDocsRegistrationFactory("data/client_secret.json", {"settings": "1SteMGOoigoPyZMJsB5GG82K4WNh-N2AQIck_xtrmtz8", "registrations": "11FLy4qTOScUOLj4xGVPMy12940DsOYz2pmoPDf9pDhA", "db": "1VUuX4UbsWsxd5QUKA7FjsebU2uPTs80dBSSn4Tay_Vk"})
+    google_authenticator = GoogleAuthenticatorInterface("data/dependencies/client_secret.json")
+    google_client = google_authenticator.gspread
+    factory = GDocsRegistrationFactory({"settings": "1SteMGOoigoPyZMJsB5GG82K4WNh-N2AQIck_xtrmtz8", "registrations": "11FLy4qTOScUOLj4xGVPMy12940DsOYz2pmoPDf9pDhA", "db": "1VUuX4UbsWsxd5QUKA7FjsebU2uPTs80dBSSn4Tay_Vk"},google_client)
     p = factory.build_registrations()
     print(p)

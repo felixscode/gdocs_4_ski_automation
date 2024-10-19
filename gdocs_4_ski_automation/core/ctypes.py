@@ -30,6 +30,7 @@ class Participant:
     pre_course: str
     notes: str
 
+
 @dataclass
 class Payment:
     amount: float
