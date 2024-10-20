@@ -178,7 +178,7 @@ class GDocsDumper:
         sheet = self.gc.open_by_key(self.sheet_ids["db"])
         worksheet = sheet.worksheet("Formularantworten")
         registration_id = [[str(r._id)] for r in self.registrations]
-        worksheet.update("BF2", registration_id)
+        worksheet.update("BH2", registration_id)
         cell_values = worksheet.get_all_values()
         ids = list(zip(*cell_values))[-1][1:]
         id_mapping = {
