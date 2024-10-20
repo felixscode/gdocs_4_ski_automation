@@ -1,5 +1,6 @@
 from dataclasses import dataclass
-from enum import Enum   
+from enum import Enum
+
 
 class Course(Enum):
     ZWEGERL = "Zwergel"
@@ -7,16 +8,16 @@ class Course(Enum):
     SKI = "Ski"
     SNOWBOARD = "Snowboard"
 
+
 @dataclass
 class Name:
-    first :str
+    first: str
     last: str
 
-    
 
 @dataclass
 class ContactPerson:
-    name : Name
+    name: Name
     adress: str
     mail: str
     tel: str
@@ -37,14 +38,13 @@ class Payment:
     payed: bool
 
 
-@dataclass 
+@dataclass
 class Registration:
 
     time_stemp: int
-    _id:int
+    _id: int
     contact: ContactPerson
     participants: tuple[Participant]
     payment: Payment
     registration_mail_sent: bool
     payment_mail_sent: bool
-

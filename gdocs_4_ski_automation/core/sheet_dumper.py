@@ -1,31 +1,48 @@
-from gdocs_4_ski_automation.utils.utils import GoogleAuthenticatorInterface
-from gdocs_4_ski_automation.core.ctypes import Course
-import numpy as np
 from datetime import datetime
 
-class GDocsDumper():
-    def __init__(self,registrations, sheet_ids,g_clients):
+import numpy as np
+
+from gdocs_4_ski_automation.core.ctypes import Course
+from gdocs_4_ski_automation.utils.utils import GoogleAuthenticatorInterface
+
+
+class GDocsDumper:
+    def __init__(self, registrations: list, sheet_ids: dict, g_clients):
+        """
+        Initialize the GDocsDumper.
+
+        :param registrations: List of registration objects.
+        :param sheet_ids: Dictionary containing sheet IDs.
+        :param g_clients: Google client object.
+        """
         self.registrations = registrations
         self.sheet_ids = sheet_ids
         self.gc = g_clients
 
-
     def _dump_overview(self):
-        sheet = self.gc.open_by_key(self.sheet_ids['registrations'])
+        """
+        Dump overview data to the 'Übersicht' worksheet.
+        """
+        sheet = self.gc.open_by_key(self.sheet_ids["registrations"])
         worksheet = sheet.worksheet("Übersicht")
         all_participants = [p for r in self.registrations for p in r.participants]
         total_participants = len(all_participants)
-        total_zw = len([p for p in all_participants if p.course in [Course.ZWEGERL,Course.ZWEGERL_SNOWBOARD]])
-        total_normal = len([p for p in all_participants if p.course in [Course.SKI,Course.SNOWBOARD]])
+        total_zw = len(
+            [p for p in all_participants if p.course in [Course.ZWEGERL, Course.ZWEGERL_SNOWBOARD]]
+        )
+        total_normal = len(
+            [p for p in all_participants if p.course in [Course.SKI, Course.SNOWBOARD]]
+        )
         num_registrations = len(self.registrations)
         paid = len([r for r in self.registrations if r.payment.payed])
         not_paid = len([r for r in self.registrations if not r.payment.payed])
-        paid_ratio = paid/len(self.registrations)
-        registrations_per_contatact = np.mean([len(r.participants) for r in self.registrations])
+        paid_ratio = paid / len(self.registrations)
+        registrations_per_contact = np.mean([len(r.participants) for r in self.registrations])
         mean_age = np.mean([p.age for p in all_participants])
         min_age = min([p.age for p in all_participants])
         max_age = max([p.age for p in all_participants])
         last_gcloud_call = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
+
         cell_mapping = {
             "B4": total_zw,
             "B5": total_normal,
@@ -34,130 +51,158 @@ class GDocsDumper():
             "B10": paid,
             "B11": not_paid,
             "B12": paid_ratio,
-            "B15": registrations_per_contatact,
+            "B15": registrations_per_contact,
             "B16": mean_age,
             "B17": min_age,
             "B18": max_age,
-            "B19": last_gcloud_call
-
+            "B19": last_gcloud_call,
         }
 
         for cell, value in cell_mapping.items():
             worksheet.update_acell(cell, value)
 
-
     def _dump_paid(self):
+        """
+        Dump paid registration data to the 'Bezahlung' worksheet.
+        """
         paid_counter = 0
         data = []
         for registration in self.registrations:
-            data.append([
+            data.append(
+                [
                     int(registration._id),
                     registration.contact.name.first,
                     registration.contact.name.last,
                     registration.contact.mail,
                     registration.contact.tel,
                     registration.payment.amount,
-                    bool(registration.payment.payed)
-                ])
+                    bool(registration.payment.payed),
+                ]
+            )
             if registration.payment.payed:
                 paid_counter += 1
 
-        data = sorted(data,key=lambda x: x[0])
-        sheet = self.gc.open_by_key(self.sheet_ids['registrations'])
+        data = sorted(data, key=lambda x: x[0])
+        sheet = self.gc.open_by_key(self.sheet_ids["registrations"])
         worksheet = sheet.worksheet("Bezahlung")
         worksheet.batch_clear(["A3:F1000"])
-        worksheet.update("A3",data)
-
-        worksheet.update_acell("G1",f"Insgesammt Bezahlt: {paid_counter}/{len(data)}")
+        worksheet.update("A3", data)
+        worksheet.update_acell("G1", f"Insgesammt Bezahlt: {paid_counter}/{len(data)}")
 
     def _dump_member(self):
-
+        """
+        Dump member data to the 'Mitglied' worksheet.
+        """
         data = []
         p_names = []
         for registration in self.registrations:
             for participant in registration.participants:
                 if participant.name not in p_names:
-                    data.append([
-                        int(registration._id),
-                        participant.name.first,
-                        participant.name.last,
-                        registration.contact.name.first,
-                        registration.contact.name.last,
-                        registration.contact.mail,
-                        registration.contact.tel,
-                    ])
-
+                    data.append(
+                        [
+                            int(registration._id),
+                            participant.name.first,
+                            participant.name.last,
+                            registration.contact.name.first,
+                            registration.contact.name.last,
+                            registration.contact.mail,
+                            registration.contact.tel,
+                        ]
+                    )
                     p_names.append(participant.name)
-        data = sorted(data,key=lambda x: (x[0],x[1]))
-        sheet = self.gc.open_by_key(self.sheet_ids['registrations'])
+        data = sorted(data, key=lambda x: (x[0], x[1]))
+        sheet = self.gc.open_by_key(self.sheet_ids["registrations"])
         worksheet = sheet.worksheet("Mitglied")
         worksheet.batch_clear(["A3:G1000"])
-        worksheet.update("A3",data)
-
+        worksheet.update("A3", data)
 
     def _dump_zwergerl(self):
+        """
+        Dump Zwergerl course data to the 'Zwergerl' worksheet.
+        """
         data = []
         for registration in self.registrations:
             for p in registration.participants:
-                if p.course in [Course.ZWEGERL,Course.ZWEGERL_SNOWBOARD]:
-                    data.append([
-                        "ski" if p.course == Course.ZWEGERL else "snowboard",
-                        p.name.first,
-                        p.name.last,
-                        p.age,
-                        registration.contact.mail,
-                        registration.contact.tel,
-                        registration.contact.name.first,
-                        registration.contact.name.last,
-                        p.notes]
+                if p.course in [Course.ZWEGERL, Course.ZWEGERL_SNOWBOARD]:
+                    data.append(
+                        [
+                            "ski" if p.course == Course.ZWEGERL else "snowboard",
+                            p.name.first,
+                            p.name.last,
+                            p.age,
+                            registration.contact.mail,
+                            registration.contact.tel,
+                            registration.contact.name.first,
+                            registration.contact.name.last,
+                            p.notes,
+                        ]
                     )
-        sheet = self.gc.open_by_key(self.sheet_ids['registrations'])
+        sheet = self.gc.open_by_key(self.sheet_ids["registrations"])
         worksheet = sheet.worksheet("Zwergerl")
         worksheet.batch_clear(["A3:I1000"])
-        worksheet.update("A3",data)
-        worksheet.update_acell("G1",len(data))
+        worksheet.update("A3", data)
+        worksheet.update_acell("G1", len(data))
 
     def _dump_normal(self):
+        """
+        Dump normal course data to the 'Kurse' worksheet.
+        """
         data = []
         for registration in self.registrations:
             for p in registration.participants:
-                if p.course in [Course.SKI,Course.SNOWBOARD]:
-                    data.append([
-                        "ski" if p.course == Course.SKI else "snowboard",
-                        p.name.first,
-                        p.name.last,
-                        p.age,
-                        registration.contact.mail,
-                        registration.contact.tel,
-                        registration.contact.name.first,
-                        registration.contact.name.last,
-                        p.pre_course,
-                        p.notes]
+                if p.course in [Course.SKI, Course.SNOWBOARD]:
+                    data.append(
+                        [
+                            "ski" if p.course == Course.SKI else "snowboard",
+                            p.name.first,
+                            p.name.last,
+                            p.age,
+                            registration.contact.mail,
+                            registration.contact.tel,
+                            registration.contact.name.first,
+                            registration.contact.name.last,
+                            p.pre_course,
+                            p.notes,
+                        ]
                     )
-        sheet = self.gc.open_by_key(self.sheet_ids['registrations'])
+        sheet = self.gc.open_by_key(self.sheet_ids["registrations"])
         worksheet = sheet.worksheet("Kurse")
         worksheet.batch_clear(["A3:J1000"])
-        worksheet.update("A3",data)
-        worksheet.update_acell("G1",len(data))
+        worksheet.update("A3", data)
+        worksheet.update_acell("G1", len(data))
 
     def dump_mail_flags(self):
-        sheet = self.gc.open_by_key(self.sheet_ids['db'])
+        """
+        Dump mail flags to the 'Formularantworten' worksheet in the 'db' sheet.
+        """
+        sheet = self.gc.open_by_key(self.sheet_ids["db"])
         worksheet = sheet.worksheet("Formularantworten")
         registration_id = [[str(r._id)] for r in self.registrations]
-        worksheet.update("BF2",registration_id)
+        worksheet.update("BF2", registration_id)
         cell_values = worksheet.get_all_values()
         ids = list(zip(*cell_values))[-1][1:]
-        id_mapping = dict()
-        for _id in ids:
-            id_mapping[_id] = {"r_cell":f"BF{int(_id)+1}","p_cell":f"BG{int(_id)+1}","price_cell":f"BE{int(_id)+1}"}
+        id_mapping = {
+            _id: {
+                "r_cell": f"BF{int(_id) + 1}",
+                "p_cell": f"BG{int(_id) + 1}",
+                "price_cell": f"BE{int(_id) + 1}",
+            }
+            for _id in ids
+        }
+
         for registration in self.registrations:
             p_mail_sent = "TRUE" if registration.payment_mail_sent else "FALSE"
             r_mail_sent = "TRUE" if registration.registration_mail_sent else "FALSE"
-            worksheet.update_acell(id_mapping[str(registration._id)]["r_cell"],r_mail_sent)
-            worksheet.update_acell(id_mapping[str(registration._id)]["p_cell"],p_mail_sent)
-            worksheet.update_acell(id_mapping[str(registration._id)]["price_cell"],registration.payment.amount)
+            worksheet.update_acell(id_mapping[str(registration._id)]["r_cell"], r_mail_sent)
+            worksheet.update_acell(id_mapping[str(registration._id)]["p_cell"], p_mail_sent)
+            worksheet.update_acell(
+                id_mapping[str(registration._id)]["price_cell"], registration.payment.amount
+            )
 
     def dump_registrations(self):
+        """
+        Dump all registration data to the respective worksheets.
+        """
         self._dump_overview()
         self._dump_paid()
         self._dump_member()
@@ -165,19 +210,19 @@ class GDocsDumper():
         self._dump_normal()
         self.dump_mail_flags()
 
+
 if __name__ == "__main__":
     from gdocs_4_ski_automation.core.factories import GDocsRegistrationFactory
 
-
-
-
-    sheet_ids = {"settings": "1SteMGOoigoPyZMJsB5GG82K4WNh-N2AQIck_xtrmtz8",
-                "registrations": "11FLy4qTOScUOLj4xGVPMy12940DsOYz2pmoPDf9pDhA", 
-                "db": "1VUuX4UbsWsxd5QUKA7FjsebU2uPTs80dBSSn4Tay_Vk"}
+    sheet_ids = {
+        "settings": "1SteMGOoigoPyZMJsB5GG82K4WNh-N2AQIck_xtrmtz8",
+        "registrations": "11FLy4qTOScUOLj4xGVPMy12940DsOYz2pmoPDf9pDhA",
+        "db": "1VUuX4UbsWsxd5QUKA7FjsebU2uPTs80dBSSn4Tay_Vk",
+    }
 
     google_authenticator = GoogleAuthenticatorInterface("data/dependencies/client_secret.json")
     google_client = google_authenticator.gspread
-    factory = GDocsRegistrationFactory(sheet_ids,google_client)
+    factory = GDocsRegistrationFactory(sheet_ids, google_client)
     registrations = factory.build_registrations()
-    dumper = GDocsDumper(registrations,sheet_ids,google_client)
+    dumper = GDocsDumper(registrations, sheet_ids, google_client)
     dumper.dump_registrations()

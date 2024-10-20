@@ -5,6 +5,8 @@ Automation scripts for Google Docs to automate ski course registration (g.Forms)
 # What is this project?
 
 This project contains automation scripts for Google Docs to streamline ski course registration tasks using Google Forms.
+I scripted this module in 10h. It does the intended job but shouldn't be seen a finished project. Domain Logics are only poorly encapsulated.
+Feel free to take inspiration or reuse any code witch is potentially useful.
 
 # Features
 
@@ -34,14 +36,16 @@ This project contains automation scripts for Google Docs to streamline ski cours
 # Usage
 
 1. Set up your Google API credentials.
-2. get api desktop credentails and service credential and past them somewere
+2. get api desktop credentials and service credential and past them somewhere
 3. generate email templates and change mail service functions to provide correct data to html temple
 4. adapt paths in service.py
 5. Run the main script:
     ```sh
     python ./gdocs_4_ski_automation/service.py   
     ```
-this lib is intended to run as cloud function, witch gets triggert throw a simple AppScript HttpRequest
+this lib is intended to run as cloud function, witch gets triggered throw a simple AppScript HttpRequest
+
+
 
 # Contributing
 
