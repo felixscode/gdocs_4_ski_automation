@@ -79,9 +79,6 @@ def get_price(
     Returns:
         float: The total price after applying all discounts.
     """
-    prices = prices["Preise"]
-    prices = prices.set_index("Kategorie", inplace=False)
-    prices = prices["Preis"]
 
     # Calculate base prices for each participant
     price_list = list(map(lambda p: map_base_price(p, prices), participants))

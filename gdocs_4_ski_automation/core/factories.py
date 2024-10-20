@@ -11,6 +11,22 @@ from gdocs_4_ski_automation.core.price_calculation import get_price
 from gdocs_4_ski_automation.utils.utils import GoogleAuthenticatorInterface
 
 
+def map_settings_to_price_dict(settings_frame: pd.DataFrame) -> dict:
+    """
+    Maps the settings DataFrame to a dictionary containing price information.
+
+    Args:
+        settings_frame (pd.DataFrame): DataFrame containing the settings information.
+
+    Returns:
+        dict: A dictionary containing the price information.
+    """
+    prices = settings_frame["Preise"]
+    prices = prices.set_index("Kategorie", inplace=False)
+    prices = prices["Preis"]
+    return prices
+
+
 def dataframe_to_registration_mapper(
     db_frame: pd.DataFrame, settings_frame: pd.DataFrame, registrations_frame: pd.DataFrame
 ):
@@ -25,6 +41,8 @@ def dataframe_to_registration_mapper(
     Yields:
         Registration: A Registration object constructed from the dataframes.
     """
+    price_dict = map_settings_to_price_dict(settings_frame)
+
     for i, line in db_frame["Formularantworten"].iterrows():
         if line["Zeitstempel"] != "":
             time_stemp = line["Zeitstempel"]
@@ -35,7 +53,7 @@ def dataframe_to_registration_mapper(
                     (build_participant(line, i, registrations_frame) for i in range(8)),
                 )
             )
-            pay_sum = get_price(participants, time_stemp, settings_frame)
+            pay_sum = get_price(participants, time_stemp, price_dict)
             payed_flag = get_paid_flag(registrations_frame, line["ID"])
             payment = Payment(amount=pay_sum, payed=payed_flag)
             payment_mail_sent = line["p_mail_sent"] == "TRUE"
