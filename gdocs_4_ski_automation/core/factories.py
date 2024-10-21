@@ -115,7 +115,7 @@ def build_participant(line: pd.Series, i: int, registration_frame: pd.DataFrame)
     match line[f"Welcher_Kurs_soll_besucht_werden?_{i if i > 0 else ''}"]:
         case "Zwergerl":
             course = Course.ZWEGERL
-        case "Zwergerl Snowboard":
+        case "Zwergerl-Snowboard":
             course = Course.ZWEGERL_SNOWBOARD
         case "Ski":
             course = Course.SKI
