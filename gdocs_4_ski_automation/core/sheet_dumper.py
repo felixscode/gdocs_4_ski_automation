@@ -85,9 +85,8 @@ class GDocsDumper:
         data = sorted(data, key=lambda x: x[0])
         sheet = self.gc.open_by_key(self.sheet_ids["registrations"])
         worksheet = sheet.worksheet("Bezahlung")
-        worksheet.batch_clear(["A3:F1000"])
         worksheet.update("A3", data)
-        worksheet.update_acell("G1", f"Insgesammt Bezahlt: {paid_counter}/{len(data)}")
+        worksheet.update_acell("G1", f"Insgesamt Bezahlt: {paid_counter}/{len(data)}")
 
     def _dump_member(self):
         """
@@ -113,7 +112,6 @@ class GDocsDumper:
         data = sorted(data, key=lambda x: (x[0], x[1]))
         sheet = self.gc.open_by_key(self.sheet_ids["registrations"])
         worksheet = sheet.worksheet("Mitglied")
-        worksheet.batch_clear(["A3:G1000"])
         worksheet.update("A3", data)
 
     def _dump_zwergerl(self):
