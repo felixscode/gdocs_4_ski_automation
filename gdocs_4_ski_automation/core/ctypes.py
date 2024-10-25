@@ -3,8 +3,8 @@ from enum import Enum
 
 
 class Course(Enum):
-    ZWEGERL = "Zwergel"
-    ZWEGERL_SNOWBOARD = "Zwergel Snowboard"
+    ZWEGERL = "Zwergerl"
+    ZWEGERL_SNOWBOARD = "Zwergerl Snowboard"
     SKI = "Ski"
     SNOWBOARD = "Snowboard"
 

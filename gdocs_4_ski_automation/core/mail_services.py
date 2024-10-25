@@ -49,7 +49,6 @@ def fill_registration_template(registration: Registration, _template_dir, checkl
                 "age": p.age,
                 "course": p.course.value,
                 "previous_course": p.pre_course,
-                "member_status": "Ja",
             }
         )
 
