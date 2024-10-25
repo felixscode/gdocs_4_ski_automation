@@ -112,10 +112,10 @@ def mail_service(
             template = fill_registration_template(r, registration_template_dir, checklist_dir,mail_settings)
             send_mail_function(r.contact.mail, template, mail_settings, credentials_dir)
             r.registration_mail_sent = True
-        if not r.payment_mail_sent and r.payment.payed:
-            template = fill_paid_template(r, paid_template_dir,mail_settings)
-            send_mail_function(r.contact.mail, template, mail_settings, credentials_dir)
-            r.payment_mail_sent = True
+        # if not r.payment_mail_sent and r.payment.payed:
+        #     template = fill_paid_template(r, paid_template_dir,mail_settings)
+        #     send_mail_function(r.contact.mail, template, mail_settings, credentials_dir)
+        #     r.payment_mail_sent = True
     return registrations
 
 

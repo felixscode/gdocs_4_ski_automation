@@ -33,6 +33,7 @@ def run(
     # Create a factory for building registrations
     factory = GDocsRegistrationFactory(sheet_ids, google_client)
     registrations = factory.build_registrations()
+    
 
     # Process registrations and send emails
     registrations = mail_service(
