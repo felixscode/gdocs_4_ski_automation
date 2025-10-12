@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from typing import Dict, Generator, List, Optional, Tuple, Union
 
 import gspread
 import pandas as pd
@@ -11,15 +12,14 @@ from gdocs_4_ski_automation.core.price_calculation import get_price
 from gdocs_4_ski_automation.utils.utils import GoogleAuthenticatorInterface
 
 
-def map_settings_to_price_dict(settings_frame: pd.DataFrame) -> dict:
-    """
-    Maps the settings DataFrame to a dictionary containing price information.
+def map_settings_to_price_dict(settings_frame: pd.DataFrame) -> Dict[str, Union[str, float]]:
+    """Maps the settings DataFrame to a dictionary containing price information.
 
     Args:
-        settings_frame (pd.DataFrame): DataFrame containing the settings information.
+        settings_frame: DataFrame containing the settings information with 'Preise' sheet.
 
     Returns:
-        dict: A dictionary containing the price information.
+        Dictionary mapping price categories to their corresponding prices.
     """
     prices = settings_frame["Preise"]
     prices = prices.set_index("Kategorie", inplace=False)
@@ -28,18 +28,22 @@ def map_settings_to_price_dict(settings_frame: pd.DataFrame) -> dict:
 
 
 def dataframe_to_registration_mapper(
-    db_frame: pd.DataFrame, settings_frame: pd.DataFrame, registrations_frame: pd.DataFrame
-):
-    """
-    Maps data from the provided dataframes to Registration objects.
+    db_frame: pd.DataFrame, 
+    settings_frame: pd.DataFrame, 
+    registrations_frame: pd.DataFrame
+) -> Generator[Registration, None, None]:
+    """Maps data from the provided dataframes to Registration objects.
+
+    This function processes form responses from the database frame and creates
+    Registration objects with calculated prices and payment status.
 
     Args:
-        db_frame (pd.DataFrame): DataFrame containing the database information.
-        settings_frame (pd.DataFrame): DataFrame containing the settings information.
-        registrations_frame (pd.DataFrame): DataFrame containing the registrations information.
+        db_frame: DataFrame containing the database information with form responses.
+        settings_frame: DataFrame containing the settings information including prices.
+        registrations_frame: DataFrame containing the registrations information with payment status.
 
     Yields:
-        Registration: A Registration object constructed from the dataframes.
+        Registration objects constructed from the dataframes.
     """
     price_dict = map_settings_to_price_dict(settings_frame)
 
@@ -70,23 +74,22 @@ def dataframe_to_registration_mapper(
             )
 
 
-def get_paid_flag(registrations_frame: pd.DataFrame, id: str) -> bool:
-    """
-    Checks if the registration with the given ID has been paid.
+def get_paid_flag(registrations_frame: pd.DataFrame, registration_id: str) -> bool:
+    """Checks if the registration with the given ID has been paid.
 
     Args:
-        registrations_frame (pd.DataFrame): DataFrame containing the registrations information.
-        id (str): The ID of the registration to check.
+        registrations_frame: DataFrame containing the registrations information with payment data.
+        registration_id: The ID of the registration to check payment status for.
 
     Returns:
-        bool: True if the registration has been paid, False otherwise.
+        True if the registration has been paid, False otherwise.
     """
     registered_ids = list(
         filter(lambda x: x != "", list(registrations_frame["Bezahlung"].loc[:, "ID"].values))
     )
-    if id not in registered_ids:
+    if registration_id not in registered_ids:
         return False
-    result = registrations_frame["Bezahlung"].loc[registrations_frame["Bezahlung"]["ID"] == id]
+    result = registrations_frame["Bezahlung"].loc[registrations_frame["Bezahlung"]["ID"] == registration_id]
     paid = result["Bezahlt"].values[0]
     return paid == "TRUE"
 
@@ -100,17 +103,19 @@ def get_paid_flag(registrations_frame: pd.DataFrame, id: str) -> bool:
 #     return paid == "TRUE"
 
 
-def build_participant(line: pd.Series, i: int, registration_frame: pd.DataFrame) -> Participant:
-    """
-    Builds a Participant object from a line of the dataframe.
+def build_participant(line: pd.Series, i: int, registration_frame: pd.DataFrame) -> Optional[Participant]:
+    """Builds a Participant object from a line of the dataframe.
 
     Args:
-        line (pd.Series): A row from the dataframe containing participant data.
-        i (int): The index of the participant in the registration form.
-        registration_frame (pd.DataFrame): The dataframe containing registration data.
+        line: A row from the dataframe containing participant data from form responses.
+        i: The index of the participant in the registration form (0-7).
+        registration_frame: The dataframe containing registration data (currently unused).
 
     Returns:
-        Participant: The constructed Participant object or None if no course is selected.
+        The constructed Participant object or None if no course is selected.
+
+    Raises:
+        ValueError: If an unknown course type is encountered.
     """
     match line[f"Welcher_Kurs_soll_besucht_werden?_{i if i > 0 else ''}"]:
         case "Zwergerl":
@@ -138,14 +143,13 @@ def build_participant(line: pd.Series, i: int, registration_frame: pd.DataFrame)
 
 
 def build_contact(line: pd.Series) -> ContactPerson:
-    """
-    Builds a ContactPerson object from a line of the dataframe.
+    """Builds a ContactPerson object from a line of the dataframe.
 
     Args:
-        line (pd.Series): A row from the dataframe containing contact person data.
+        line: A row from the dataframe containing contact person data from form responses.
 
     Returns:
-        ContactPerson: The constructed ContactPerson object.
+        The constructed ContactPerson object with name, address, email, and phone.
     """
     return ContactPerson(
         name=Name(first=line["Vorname"], last=line["Nachname"]),
@@ -156,8 +160,20 @@ def build_contact(line: pd.Series) -> ContactPerson:
 
 
 class LocalFileRegistrationFactory:
-    def __init__(self, file_path):
-
+    """Factory for building registrations from local Excel files.
+    
+    Note: This class is not currently implemented.
+    """
+    
+    def __init__(self, file_path: Path) -> None:
+        """Initialize the local file registration factory.
+        
+        Args:
+            file_path: Path to the directory containing Excel files.
+            
+        Raises:
+            NotImplementedError: This class is not yet implemented.
+        """
         self.file_path = file_path
         raise NotImplementedError("This class is not implemented yet")
 
@@ -173,32 +189,42 @@ class LocalFileRegistrationFactory:
         self.registrations_frame = self._load(file_path / self.registration_file_name)
         self.db_frame = self._load(file_path / self.db_file_name)
 
-    def _load(self, dir):
-        return pd.read_excel(dir)
+    def _load(self, directory: Path) -> pd.DataFrame:
+        """Load Excel file from directory path.
+        
+        Args:
+            directory: Path to the Excel file.
+            
+        Returns:
+            DataFrame with the loaded Excel data.
+        """
+        return pd.read_excel(directory)
 
-    def build_registrations(self) -> tuple[Registration]:
-        return dataframe_to_registration_mapper(
+    def build_registrations(self) -> Tuple[Registration, ...]:
+        """Build registration objects from local files.
+        
+        Returns:
+            Tuple of Registration objects.
+        """
+        return tuple(dataframe_to_registration_mapper(
             self.db_frame, self.settings_frame, self.registrations_frame
-        )
+        ))
 
 
 class GDocsRegistrationFactory:
-    def __init__(self, sheet_ids, g_client):
-        """
-        Initializes the factory with the provided Google Sheets IDs and Google client.
+    """Factory for building registrations from Google Sheets data.
+    
+    This factory authenticates with Google Sheets API and extracts registration
+    data from multiple sheets to create Registration objects.
+    """
+    
+    def __init__(self, sheet_ids: Dict[str, str], g_client: gspread.Client) -> None:
+        """Initializes the factory with Google Sheets IDs and client.
+        
         Args:
-            sheet_ids (dict): A dictionary containing the IDs of the Google Sheets.
+            sheet_ids: Dictionary containing the IDs of the Google Sheets.
                 Expected keys are 'settings', 'registrations', and 'db'.
-            g_client (object): The Google client used to interact with the Google Sheets API.
-        Attributes:
-            sheet_ids (dict): Stores the provided sheet IDs.
-            setting_sheet_id (str): The ID of the settings sheet.
-            registration_sheet_id (str): The ID of the registrations sheet.
-            db_sheet_id (str): The ID of the database sheet.
-            gc (object): The Google client used for API interactions.
-            settings_frame (dict): DataFrame containing data from the settings sheet.
-            registrations_frame (dict): DataFrame containing data from the registrations sheet.
-            db_frame (dict): DataFrame containing data from the database sheet.
+            g_client: The Google client used to interact with the Google Sheets API.
         """
 
         # get the sheet ids and client as global variables
@@ -221,22 +247,30 @@ class GDocsRegistrationFactory:
             for title, frame in self._load(self.db_sheet_id, ["Formularantworten"], head=1)
         }
 
-    def check_sheet_id(self, sheet_id):
+    def check_sheet_id(self, sheet_id: str) -> None:
+        """Check if a Google Sheet with the given ID exists.
+        
+        Args:
+            sheet_id: The Google Sheets ID to verify.
+            
+        Raises:
+            FileNotFoundError: If the sheet with the given ID is not found.
+        """
         try:
             self.gc.open_by_key(sheet_id)
         except gspread.exceptions.SpreadsheetNotFound:
             raise FileNotFoundError(f"Sheet with id {sheet_id} not found")
 
-    def _make_headers_unique(self, headers):
-        """
-        Ensures that headers are unique by appending a count to duplicate headers.
+    def _make_headers_unique(self, headers: List[str]) -> Generator[str, None, None]:
+        """Ensures that headers are unique by appending a count to duplicate headers.
+        
         Also replaces spaces with underscores in the headers.
 
         Args:
-            headers (list): List of header names.
+            headers: List of header names.
 
         Yields:
-            str: Unique header name.
+            Unique header name with spaces replaced by underscores.
         """
         seen = dict()
         for item in headers:
@@ -247,18 +281,25 @@ class GDocsRegistrationFactory:
                 seen[item] += 1
                 yield f"{item}{seen[item]}".replace(" ", "_")
 
-    def _load(self, sheet_id, needed_sheets=[], head=1):
-        """
-        Load data from specified sheets in a Google Sheets document.
+    def _load(
+        self, 
+        sheet_id: str, 
+        needed_sheets: Optional[List[str]] = None, 
+        head: int = 1
+    ) -> Generator[Tuple[str, pd.DataFrame], None, None]:
+        """Load data from specified sheets in a Google Sheets document.
 
         Args:
-            sheet_id (str): The ID of the Google Sheets document.
-            needed_sheets (list, optional): List of sheet titles to load. Defaults to an empty list.
-            head (int, optional): Number of header rows to skip. Defaults to 1.
+            sheet_id: The ID of the Google Sheets document.
+            needed_sheets: List of sheet titles to load. Defaults to empty list.
+            head: Number of header rows to skip. Defaults to 1.
 
         Yields:
-            tuple: A tuple containing the sheet title and a pandas DataFrame with the sheet's data.
+            Tuple containing the sheet title and a pandas DataFrame with the sheet's data.
         """
+        if needed_sheets is None:
+            needed_sheets = []
+            
         # self.check_sheet_id(sheet_id) # check if the sheet exists # not needed for now (performance)
         sheets = self.gc.open_by_key(sheet_id)
         for sheet in sheets.worksheets():
@@ -269,11 +310,11 @@ class GDocsRegistrationFactory:
                 headers = list(self._make_headers_unique(headers))
                 yield sheet.title, pd.DataFrame(records, columns=headers)
 
-    def build_registrations(self) -> tuple:
-        """
-        Converts data from the database, settings, and registrations frames into a list of registration objects.
+    def build_registrations(self) -> List[Registration]:
+        """Converts data from the database, settings, and registrations frames into Registration objects.
+        
         Returns:
-            tuple: A tuple containing the list of registration objects.
+            List of Registration objects built from the Google Sheets data.
         """
 
         return list(

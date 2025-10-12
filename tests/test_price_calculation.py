@@ -1,11 +1,10 @@
+
 from gdocs_4_ski_automation.core.price_calculation import get_price
 from gdocs_4_ski_automation.core.ctypes import Course, Participant, Name
 
 
-
-
-def test_price_calc0():
-
+def test_price_calc0() -> None:
+    """Test price calculation for a single child participant without early bird discount."""
     participants = [Participant(
         name = Name("Max", "Mustermann"),
         age=10,
@@ -25,8 +24,8 @@ def test_price_calc0():
     assert get_price(participants,date,prices=prices) == 200
 
 
-def test_price_calc1():
-
+def test_price_calc1() -> None:
+    """Test price calculation for two child participants with early bird discount."""
     participants = [Participant(
         name = Name("Max", "Mustermann"),
         age=10,
@@ -51,8 +50,8 @@ def test_price_calc1():
     }
     assert get_price(participants,date,prices=prices) == 360
 
-def test_price_calc2():
-
+def test_price_calc2() -> None:
+    """Test price calculation for two adult participants with early bird discount."""
     participants = [Participant(
         name = Name("Max", "Mustermann"),
         age=20,
@@ -77,8 +76,8 @@ def test_price_calc2():
     }
     assert get_price(participants,date,prices=prices) == 560
 
-def test_price_calc3():
-
+def test_price_calc3() -> None:
+    """Test price calculation for mixed age participants with early bird discount."""
     participants = [Participant(
         name = Name("Max", "Mustermann"),
         age=2,
@@ -104,8 +103,8 @@ def test_price_calc3():
     assert get_price(participants,date,prices=prices) == 460
 
 
-def test_price_calc4():
-
+def test_price_calc4() -> None:
+    """Test price calculation for mixed courses with family discount but no early bird discount."""
     participants = [Participant(
         name = Name("Max", "Mustermann"),
         age=2,
@@ -145,8 +144,8 @@ def test_price_calc4():
     }
     assert get_price(participants,date,prices=prices) == (100+100+300+200)-(2*5)
 
-def test_price_calc5():
-
+def test_price_calc5() -> None:
+    """Test price calculation for mixed courses with both family and early bird discounts."""
     participants = [Participant(
         name = Name("Max", "Mustermann"),
         age=2,

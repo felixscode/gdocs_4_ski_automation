@@ -4,7 +4,15 @@ build-backend = "setuptools.build_meta"
 [project]
 dynamic = ["version"]
 name = "gdocs_4_ski_automation"
-dependencies = ["pandas","openpyxl","gspread","jinja2","pyyaml","yagmail"]
+dependencies = [
+    "pandas",
+    "openpyxl",
+    "gspread",
+    "jinja2",
+    "pyyaml",
+    "yagmail",
+    "ruff>=0.14.0",
+]
 requires-python = ">= 3.11"
 authors = [
     {name = "Felix Schelling", email = "felix.schelling@protonmail.com"},

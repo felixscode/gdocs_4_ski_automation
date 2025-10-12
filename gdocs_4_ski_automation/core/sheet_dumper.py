@@ -1,34 +1,90 @@
 from datetime import datetime
+from time import sleep
+from typing import Dict, List
 
+import gspread
 import numpy as np
+from gspread.exceptions import APIError
 
-from gdocs_4_ski_automation.core.ctypes import Course
+from gdocs_4_ski_automation.core.ctypes import Course, Registration
 from gdocs_4_ski_automation.utils.utils import GoogleAuthenticatorInterface
 
 
 class GDocsDumper:
-    def __init__(self, registrations: list, sheet_ids: dict, g_clients):
+    def __init__(
+        self,
+        registrations: List[Registration],
+        sheet_ids: Dict[str, str],
+        g_clients: gspread.Client,
+    ):
         """
         Initialize the GDocsDumper.
 
-        :param registrations: List of registration objects.
-        :param sheet_ids: Dictionary containing sheet IDs.
-        :param g_clients: Google client object.
+        Args:
+            registrations: List of registration objects.
+            sheet_ids: Dictionary containing sheet IDs.
+            g_clients: Google client object.
         """
         self.registrations = registrations
         self.sheet_ids = sheet_ids
         self.gc = g_clients
+        self._sheets_cache: Dict[str, gspread.Spreadsheet] = {}
 
-    def _dump_overview(self):
+    def _get_sheet(self, sheet_key: str) -> gspread.Spreadsheet:
         """
-        Dump overview data to the 'Übersicht' worksheet.
+        Get a cached sheet object to minimize API calls.
+
+        Args:
+            sheet_key: Key from sheet_ids dict ('registrations', 'db', etc.).
+
+        Returns:
+            Cached spreadsheet object.
         """
-        sheet = self.gc.open_by_key(self.sheet_ids["registrations"])
+        if sheet_key not in self._sheets_cache:
+            self._sheets_cache[sheet_key] = self.gc.open_by_key(self.sheet_ids[sheet_key])
+        return self._sheets_cache[sheet_key]
+
+    def _batch_update_with_retry(
+        self,
+        worksheet: gspread.Worksheet,
+        updates: List[Dict],
+        max_retries: int = 3,
+    ) -> None:
+        """
+        Execute batch update with exponential backoff retry on rate limits.
+
+        Args:
+            worksheet: Target worksheet.
+            updates: List of update dictionaries with 'range' and 'values'.
+            max_retries: Maximum number of retry attempts.
+        """
+        for attempt in range(max_retries):
+            try:
+                worksheet.batch_update(updates)
+                return
+            except APIError as e:
+                if e.response.status_code == 429 and attempt < max_retries - 1:
+                    wait_time = 2**attempt  # Exponential backoff: 1s, 2s, 4s
+                    sleep(wait_time)
+                    continue
+                raise
+
+    def _dump_overview(self) -> None:
+        """
+        Dump overview data to the 'Übersicht' worksheet using batch update.
+        Reduces from 12 individual API calls to 1 batch call.
+        """
+        sheet = self._get_sheet("registrations")
         worksheet = sheet.worksheet("Übersicht")
+
         all_participants = [p for r in self.registrations for p in r.participants]
         total_participants = len(all_participants)
         total_zw = len(
-            [p for p in all_participants if p.course in [Course.ZWEGERL, Course.ZWEGERL_SNOWBOARD]]
+            [
+                p
+                for p in all_participants
+                if p.course in [Course.ZWEGERL, Course.ZWEGERL_SNOWBOARD]
+            ]
         )
         total_normal = len(
             [p for p in all_participants if p.course in [Course.SKI, Course.SNOWBOARD]]
@@ -36,37 +92,42 @@ class GDocsDumper:
         num_registrations = len(self.registrations)
         paid = len([r for r in self.registrations if r.payment.payed])
         not_paid = len([r for r in self.registrations if not r.payment.payed])
-        paid_ratio = paid / len(self.registrations)
-        registrations_per_contact = np.mean([len(r.participants) for r in self.registrations])
-        mean_age = np.mean([p.age for p in all_participants])
-        min_age = min([p.age for p in all_participants])
-        max_age = max([p.age for p in all_participants])
+        paid_ratio = paid / len(self.registrations) if self.registrations else 0
+        registrations_per_contact = (
+            np.mean([len(r.participants) for r in self.registrations])
+            if self.registrations
+            else 0
+        )
+        mean_age = np.mean([p.age for p in all_participants]) if all_participants else 0
+        min_age = min([p.age for p in all_participants]) if all_participants else 0
+        max_age = max([p.age for p in all_participants]) if all_participants else 0
         last_gcloud_call = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
 
-        cell_mapping = {
-            "B4": total_zw,
-            "B5": total_normal,
-            "B6": total_participants,
-            "B7": num_registrations,
-            "B10": paid,
-            "B11": not_paid,
-            "B12": paid_ratio,
-            "B15": registrations_per_contact,
-            "B16": mean_age,
-            "B17": min_age,
-            "B18": max_age,
-            "B19": last_gcloud_call,
-        }
+        # Use batch update instead of individual update_acell calls
+        cell_updates = [
+            {"range": "B4", "values": [[total_zw]]},
+            {"range": "B5", "values": [[total_normal]]},
+            {"range": "B6", "values": [[total_participants]]},
+            {"range": "B7", "values": [[num_registrations]]},
+            {"range": "B10", "values": [[paid]]},
+            {"range": "B11", "values": [[not_paid]]},
+            {"range": "B12", "values": [[paid_ratio]]},
+            {"range": "B15", "values": [[registrations_per_contact]]},
+            {"range": "B16", "values": [[mean_age]]},
+            {"range": "B17", "values": [[min_age]]},
+            {"range": "B18", "values": [[max_age]]},
+            {"range": "B19", "values": [[last_gcloud_call]]},
+        ]
+        self._batch_update_with_retry(worksheet, cell_updates)
 
-        for cell, value in cell_mapping.items():
-            worksheet.update_acell(cell, value)
-
-    def _dump_paid(self):
+    def _dump_paid(self) -> None:
         """
         Dump paid registration data to the 'Bezahlung' worksheet.
+        Combines two updates into a single batch operation.
         """
         paid_counter = 0
         data = []
+
         for registration in self.registrations:
             data.append(
                 [
@@ -83,17 +144,24 @@ class GDocsDumper:
                 paid_counter += 1
 
         data = sorted(data, key=lambda x: x[0])
-        sheet = self.gc.open_by_key(self.sheet_ids["registrations"])
+        sheet = self._get_sheet("registrations")
         worksheet = sheet.worksheet("Bezahlung")
-        worksheet.update("A3", data)
-        worksheet.update_acell("G1", f"Insgesamt Bezahlt: {paid_counter}/{len(data)}")
 
-    def _dump_member(self):
+        # Batch update both data and summary
+        updates = [
+            {"range": "A3", "values": data},
+            {"range": "G1", "values": [[f"Insgesamt Bezahlt: {paid_counter}/{len(data)}"]]},
+        ]
+        self._batch_update_with_retry(worksheet, updates)
+
+    def _dump_member(self) -> None:
         """
         Dump member data to the 'Mitglied' worksheet.
+        Uses single update call for all data.
         """
         data = []
         p_names = []
+
         for registration in self.registrations:
             for participant in registration.participants:
                 if participant.name not in p_names:
@@ -109,16 +177,19 @@ class GDocsDumper:
                         ]
                     )
                     p_names.append(participant.name)
+
         data = sorted(data, key=lambda x: (x[0], x[1]))
-        sheet = self.gc.open_by_key(self.sheet_ids["registrations"])
+        sheet = self._get_sheet("registrations")
         worksheet = sheet.worksheet("Mitglied")
         worksheet.update("A3", data)
 
-    def _dump_zwergerl(self):
+    def _dump_zwergerl(self) -> None:
         """
         Dump Zwergerl course data to the 'Zwergerl' worksheet.
+        Combines clear, data update, and count into batch operation.
         """
         data = []
+
         for registration in self.registrations:
             for p in registration.participants:
                 if p.course in [Course.ZWEGERL, Course.ZWEGERL_SNOWBOARD]:
@@ -135,17 +206,25 @@ class GDocsDumper:
                             p.notes,
                         ]
                     )
-        sheet = self.gc.open_by_key(self.sheet_ids["registrations"])
-        worksheet = sheet.worksheet("Zwergerl")
-        worksheet.batch_clear(["A3:I1000"])
-        worksheet.update("A3", data)
-        worksheet.update_acell("G1", len(data))
 
-    def _dump_normal(self):
+        sheet = self._get_sheet("registrations")
+        worksheet = sheet.worksheet("Zwergerl")
+
+        # Clear and update in batch
+        worksheet.batch_clear(["A3:I1000"])
+        updates = [
+            {"range": "A3", "values": data},
+            {"range": "G1", "values": [[len(data)]]},
+        ]
+        self._batch_update_with_retry(worksheet, updates)
+
+    def _dump_normal(self) -> None:
         """
         Dump normal course data to the 'Kurse' worksheet.
+        Combines clear, data update, and count into batch operation.
         """
         data = []
+
         for registration in self.registrations:
             for p in registration.participants:
                 if p.course in [Course.SKI, Course.SNOWBOARD]:
@@ -163,20 +242,31 @@ class GDocsDumper:
                             p.notes,
                         ]
                     )
-        sheet = self.gc.open_by_key(self.sheet_ids["registrations"])
-        worksheet = sheet.worksheet("Kurse")
-        worksheet.batch_clear(["A3:J1000"])
-        worksheet.update("A3", data)
-        worksheet.update_acell("G1", len(data))
 
-    def dump_mail_flags(self):
+        sheet = self._get_sheet("registrations")
+        worksheet = sheet.worksheet("Kurse")
+
+        # Clear and update in batch
+        worksheet.batch_clear(["A3:J1000"])
+        updates = [
+            {"range": "A3", "values": data},
+            {"range": "G1", "values": [[len(data)]]},
+        ]
+        self._batch_update_with_retry(worksheet, updates)
+
+    def dump_mail_flags(self) -> None:
         """
         Dump mail flags to the 'Formularantworten' worksheet in the 'db' sheet.
+        Reduces from 3N+2 individual API calls to 2 batch calls.
         """
-        sheet = self.gc.open_by_key(self.sheet_ids["db"])
+        sheet = self._get_sheet("db")
         worksheet = sheet.worksheet("Formularantworten")
+
+        # First update: registration IDs
         registration_id = [[str(r._id)] for r in self.registrations]
         worksheet.update("BH2", registration_id)
+
+        # Get all values once
         cell_values = worksheet.get_all_values()
         ids = list(zip(*cell_values))[-1][1:]
         id_mapping = {
@@ -188,24 +278,47 @@ class GDocsDumper:
             for _id in ids
         }
 
+        # Prepare batch updates for all flags
+        updates = []
         for registration in self.registrations:
             p_mail_sent = "TRUE" if registration.payment_mail_sent else "FALSE"
             r_mail_sent = "TRUE" if registration.registration_mail_sent else "FALSE"
-            worksheet.update_acell(id_mapping[str(registration._id)]["r_cell"], r_mail_sent)
-            worksheet.update_acell(id_mapping[str(registration._id)]["p_cell"], p_mail_sent)
-            worksheet.update_acell(
-                id_mapping[str(registration._id)]["price_cell"], registration.payment.amount
+
+            updates.extend(
+                [
+                    {
+                        "range": id_mapping[str(registration._id)]["r_cell"],
+                        "values": [[r_mail_sent]],
+                    },
+                    {
+                        "range": id_mapping[str(registration._id)]["p_cell"],
+                        "values": [[p_mail_sent]],
+                    },
+                    {
+                        "range": id_mapping[str(registration._id)]["price_cell"],
+                        "values": [[registration.payment.amount]],
+                    },
+                ]
             )
 
-    def dump_registrations(self):
+        # Single batch update for all mail flags
+        self._batch_update_with_retry(worksheet, updates)
+
+    def dump_registrations(self) -> None:
         """
         Dump all registration data to the respective worksheets.
+        Adds small delays between operations to respect API rate limits.
         """
         self._dump_overview()
+        sleep(0.3)  # Brief pause to respect rate limits
         self._dump_paid()
+        sleep(0.3)
         self._dump_member()
+        sleep(0.3)
         self._dump_zwergerl()
+        sleep(0.3)
         self._dump_normal()
+        sleep(0.3)
         self.dump_mail_flags()
 
 
