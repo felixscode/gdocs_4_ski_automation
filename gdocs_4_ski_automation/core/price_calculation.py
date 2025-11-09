@@ -59,10 +59,10 @@ def get_family_discount(participant_count: int, prices: Dict[str, Union[str, flo
     Returns:
         float: The family discount amount.
     """
-    if participant_count < 3:
+    if participant_count < 2:
         return 0
     else:
-        return float(prices["FamilienRabatt"]) * (participant_count - 2)
+        return float(prices["FamilienRabatt"]) * (participant_count - 1)
 
 
 def get_price(
