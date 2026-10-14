@@ -257,51 +257,35 @@ class GDocsDumper:
     def dump_mail_flags(self) -> None:
         """
         Dump mail flags to the 'Formularantworten' worksheet in the 'db' sheet.
-        Reduces from 3N+2 individual API calls to 2 batch calls.
+        Each registration's ID equals its row index - 1, so values are written
+        to that row directly. This keeps working when the sheet contains empty
+        rows (e.g. cleared responses from a previous season).
         """
         sheet = self._get_sheet("db")
         worksheet = sheet.worksheet("Formularantworten")
 
-        # First update: registration IDs
-        registration_id = [[str(r._id)] for r in self.registrations]
-        worksheet.update("BH2", registration_id)
-
-        # Get all values once
-        cell_values = worksheet.get_all_values()
-        ids = list(zip(*cell_values))[-1][1:]
-        id_mapping = {
-            _id: {
-                "r_cell": f"BF{int(_id) + 1}",
-                "p_cell": f"BG{int(_id) + 1}",
-                "price_cell": f"BE{int(_id) + 1}",
-            }
-            for _id in ids
-        }
-
-        # Prepare batch updates for all flags
+        # Prepare batch updates for IDs, price and mail flags
         updates = []
         for registration in self.registrations:
+            row = registration._id + 1
             p_mail_sent = "TRUE" if registration.payment_mail_sent else "FALSE"
             r_mail_sent = "TRUE" if registration.registration_mail_sent else "FALSE"
 
-            updates.extend(
-                [
-                    {
-                        "range": id_mapping[str(registration._id)]["r_cell"],
-                        "values": [[r_mail_sent]],
-                    },
-                    {
-                        "range": id_mapping[str(registration._id)]["p_cell"],
-                        "values": [[p_mail_sent]],
-                    },
-                    {
-                        "range": id_mapping[str(registration._id)]["price_cell"],
-                        "values": [[registration.payment.amount]],
-                    },
-                ]
+            updates.append(
+                {
+                    "range": f"BE{row}:BH{row}",
+                    "values": [
+                        [
+                            registration.payment.amount,
+                            r_mail_sent,
+                            p_mail_sent,
+                            str(registration._id),
+                        ]
+                    ],
+                }
             )
 
-        # Single batch update for all mail flags
+        # Single batch update for all IDs and mail flags
         self._batch_update_with_retry(worksheet, updates)
 
     def dump_registrations(self) -> None:

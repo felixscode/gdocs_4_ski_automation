@@ -36,7 +36,9 @@ def send_mail(
         yag = yagmail.SMTP(from_email, oauth2_file=credentials_dir)
         yag.send(
             subject=template["subject"],
-            contents=template["body"],
+            # yagmail turns every newline into <br>, which adds blank lines
+            # around tables and paragraphs, so send the HTML on one line
+            contents=template["body"].replace("\n", " "),
             to=to_email,
             prettify_html=False,
         )
