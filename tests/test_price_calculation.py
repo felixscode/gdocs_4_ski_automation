@@ -45,10 +45,11 @@ def test_price_calc1() -> None:
         "Zwergerl": 100,
         "Kind": 200,
         "Erwachsen": 300,
+        "FamilienRabatt": 5,
         "FruehbucherRabatt": 20,
         "FruehbucherRabattDatum": "01.01.2025",
     }
-    assert get_price(participants,date,prices=prices) == 360
+    assert get_price(participants,date,prices=prices) == 360-5
 
 def test_price_calc2() -> None:
     """Test price calculation for two adult participants with early bird discount."""
@@ -71,10 +72,11 @@ def test_price_calc2() -> None:
         "Zwergerl": 100,
         "Kind": 200,
         "Erwachsen": 300,
+        "FamilienRabatt": 5,
         "FruehbucherRabatt": 20,
         "FruehbucherRabattDatum": "01.01.2025",
     }
-    assert get_price(participants,date,prices=prices) == 560
+    assert get_price(participants,date,prices=prices) == 560-5
 
 def test_price_calc3() -> None:
     """Test price calculation for mixed age participants with early bird discount."""
@@ -97,10 +99,11 @@ def test_price_calc3() -> None:
         "Zwergerl": 100,
         "Kind": 200,
         "Erwachsen": 300,
+        "FamilienRabatt": 5,
         "FruehbucherRabatt": 20,
         "FruehbucherRabattDatum": "01.01.2025",
     }
-    assert get_price(participants,date,prices=prices) == 460
+    assert get_price(participants,date,prices=prices) == 460-5
 
 
 def test_price_calc4() -> None:
@@ -142,7 +145,7 @@ def test_price_calc4() -> None:
         "FruehbucherRabatt": 20,
         "FruehbucherRabattDatum": "01.01.2025",
     }
-    assert get_price(participants,date,prices=prices) == (100+100+300+200)-(2*5)
+    assert get_price(participants,date,prices=prices) == (100+100+300+200)-(3*5)
 
 def test_price_calc5() -> None:
     """Test price calculation for mixed courses with both family and early bird discounts."""
@@ -183,4 +186,4 @@ def test_price_calc5() -> None:
         "FruehbucherRabatt": 20,
         "FruehbucherRabattDatum": "01.01.2025",
     }
-    assert get_price(participants,date,prices=prices) == (100+100+300+200)-(4*20)-(2*5)
+    assert get_price(participants,date,prices=prices) == (100+100+300+200)-(4*20)-(3*5)
